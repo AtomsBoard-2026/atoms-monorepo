@@ -4,6 +4,9 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableCors(); // 괄호 cd 비워두면 "모두 허용"
+
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
 
