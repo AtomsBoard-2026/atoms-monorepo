@@ -1,0 +1,24 @@
+# .dockerignore
+
+# 1. 가장 중요: 로컬 모듈 절대 복사 금지!
+node_modules
+dist
+build
+
+# 2. 인프라 데이터 및 환경 설정
+infrastructure
+.env
+.env.*
+
+# 3. Git 및 IDE 설정
+.git
+.gitignore
+.vscode
+.idea
+
+# 4. 로그 및 캐시
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.nx

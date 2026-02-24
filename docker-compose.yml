@@ -1,0 +1,67 @@
+version: '3.8'
+
+# ============================================================
+# [Tip] 모든 서비스가 공유할 네트워크 정의
+# 나중에 atom-platform이 생겨도 이 네트워크에 끼우면 DB를 같이 쓸 수 있습니다.
+# ============================================================
+networks:
+  atoms-network:
+    driver: bridge
+
+services:
+  # ============================================================
+  # 1. 데이터베이스 (PostgreSQL)
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: atoms-shared-db  # 'shared'를 붙여 공용임을 명시
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-atoms_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      # 데이터를 프로젝트 폴더 내 'infrastructure/data'에 저장 (삭제 시 백업 용이)
+      # 기존: docker volume (안 보임) -> 변경: 로컬 폴더 (눈에 보임)
+      - ./infrastructure/postgres_data:/var/lib/postgresql/data
+    networks:
+      - atoms-network
+
+  # ============================================================
+  # 2. Prisma Studio (데이터 관리자 GUI) - ★ 보너스 추가
+  # ============================================================
+  # 웹 브라우저(http://localhost:5555)에서 DB를 엑셀처럼 수정 가능
+  studio:
+    image: node:18-alpine
+    container_name: atoms-studio
+    working_dir: /app
+    volumes:
+      - ./atoms-demo:/app # atoms-demo 폴더를 통째로 연결
+    entrypoint: ["sh", "-c", "npm install -g prisma && prisma studio --schema=prisma/schema.prisma --port 5555"]
+    ports:
+      - "5555:5555"
+    networks:
+      - atoms-network
+    depends_on:
+      - postgres
+
+  # ============================================================
+  # 3. 백엔드 API (NestJS)
+  # ============================================================
+  api:
+    build:
+      context: ./atoms-demo         # [중요] 최상위에서 atoms-demo 안으로 진입
+      dockerfile: apps/api/Dockerfile
+    container_name: atoms-api
+    restart: always
+    ports:
+      - "3333:3333"
+    environment:
+      # 도커 내부 통신용 URL (host가 localhost가 아니라 서비스명 'postgres'임)
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-atoms_db}?schema=public
+    depends_on:
+      - postgres
+    networks:
+      - atoms-network

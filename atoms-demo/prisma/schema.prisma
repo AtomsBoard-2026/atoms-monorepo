@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. 사용자 & 인증 (NextAuth 표준)
+// ==========================================
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts      Account[]
+  sessions      Session[]
+
+  boards        Board[]       // 내가 만든 보드
+  comments      Comment[]     // 내가 쓴 댓글
+  activities    ActivityLog[] // 내 활동 로그
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(uuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 2. 칸반 보드 (Core Logic)
+// ==========================================
+model Board {
+  id              String   @id @default(uuid())
+  title           String
+  imageId         String?  // Unsplash 이미지 ID
+  imageThumbUrl   String?  // 썸네일 URL
+  imageFullUrl    String?  // 전체 배경 URL
+
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  columns         Column[]
+  activityLogs    ActivityLog[] // 보드 내 활동 기록
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Column {
+  id        String   @id @default(uuid())
+  title     String
+  order     Float    @default(0) // 실수형 순서 관리
+
+  boardId   String
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  cards     Card[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Card {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  order       Float     @default(0)
+  dueDate     DateTime?
+
+  columnId    String
+  column      Column    @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  // 확장 기능 (Details)
+  comments    Comment[]
+  checklists  Checklist[]
+  labels      Label[]
+  attachments Attachment[]
+  logs        ActivityLog[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ==========================================
+// 3. 디테일 기능 (Rich Features)
+// ==========================================
+model Comment {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Checklist {
+  id        String   @id @default(uuid())
+  title     String
+
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  items     CheckItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CheckItem {
+  id          String    @id @default(uuid())
+  title       String
+  isChecked   Boolean   @default(false)
+
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+}
+
+model Label {
+  id        String   @id @default(uuid())
+  title     String
+  color     String
+  cards     Card[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 4. 활동 로그 (Audit Log)
+// ==========================================
+model ActivityLog {
+  id          String   @id @default(uuid())
+  action      String   // CREATE, UPDATE, DELETE (Enum 대신 String 사용해 유연성 확보)
+  entityId    String   // 대상 ID
+  entityType  String   // BOARD, CARD, COLUMN
+  entityTitle String   // 대상 제목 (삭제 대비)
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  boardId     String
+  board       Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  cardId      String?  // 선택적 연결
+  card        Card?    @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+}
